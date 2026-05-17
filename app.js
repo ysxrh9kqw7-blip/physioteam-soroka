@@ -2250,6 +2250,13 @@ async function _loadUserProfile(user) {
     const profiles = profilesDoc.exists ? profilesDoc.data() : {};
     if (profiles[user.uid]) {
       state.currentUser = { uid: user.uid, ...profiles[user.uid] };
+      // Sync displayName from Firebase Auth when it's better than what's stored
+      const authName = user.displayName;
+      if (authName && authName !== state.currentUser.displayName) {
+        state.currentUser.displayName = authName;
+        profiles[user.uid].displayName = authName;
+        _db.collection('physioTeam').doc('userProfiles').set(profiles).catch(() => {});
+      }
     } else {
       const existingCount = Object.keys(profiles).filter(k => !k.startsWith('_')).length;
       const role = existingCount === 0 ? 'admin' : 'readonly';
@@ -2315,6 +2322,19 @@ function bindLoginUI() {
     try {
       const cred = await _auth.createUserWithEmailAndPassword(email, password);
       await cred.user.updateProfile({ displayName: name });
+      // Fix Firestore profile displayName (onAuthStateChanged may have fired before updateProfile finished)
+      if (_db) {
+        const pd = await _db.collection('physioTeam').doc('userProfiles').get();
+        const profs = pd.exists ? pd.data() : {};
+        if (profs[cred.user.uid]) {
+          profs[cred.user.uid].displayName = name;
+          await _db.collection('physioTeam').doc('userProfiles').set(profs);
+          if (state.currentUser?.uid === cred.user.uid) {
+            state.currentUser.displayName = name;
+            _updateGreeting();
+          }
+        }
+      }
     } catch(e) {
       btn.disabled = false;
       errEl.textContent = ({
@@ -2419,7 +2439,10 @@ function _updateGreeting() {
               : h >= 12 && h < 17 ? 'צהריים טובים'
               : h >= 17 && h < 21 ? 'ערב טוב'
               : 'לילה טוב';
-  const fullName = state.currentUser.displayName || '';
+  const storedName = state.currentUser.displayName || '';
+  const authName   = _auth?.currentUser?.displayName || '';
+  const isEmail    = (s) => s.includes('@');
+  const fullName   = (!storedName || isEmail(storedName)) ? authName : storedName;
   const name = fullName ? fullName.trim().split(/\s+/)[0] : (state.currentUser.email || '');
   el.textContent = `${greet}, ${name}`;
 }
