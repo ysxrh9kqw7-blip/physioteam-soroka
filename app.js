@@ -2355,7 +2355,7 @@ async function _renderUserManagement() {
             ${t.name}${isSelf ? ' <span style="font-size:0.62rem;color:var(--primary);font-weight:600">(אתה)</span>' : ''}
           </div>
           ${user
-            ? `<div class="sp-user-email">${user.email}</div>`
+            ? `<div class="sp-user-email">${(user.displayName||user.email||'').trim().split(/\s+/)[0]}</div>`
             : `<div class="sp-user-email" style="color:#CBD5E1;font-style:italic">טרם נרשם/ה</div>`}
         </div>
         <select class="sp-user-role" data-tid="${t.id}" ${user ? `data-uid="${user.uid}"` : ''}
