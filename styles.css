@@ -1393,8 +1393,11 @@ body {
 @media (max-width: 480px) {
   :root { --panel-w: 95vw; --header-h: 80px; }
 
-  .brand-name { display: none; }
-  .soroka-logo-img { height: 28px; }
+  .brand-primary { font-size: 0.75rem; }
+  .brand-secondary { font-size: 0.55rem; }
+  .brand-icon { width: 26px; height: 26px; }
+  .brand-icon svg { width: 14px; height: 14px; }
+  .soroka-logo-img { height: 26px; }
   .tab { padding: 0.25rem 0.45rem; font-size: 0.68rem; }
   .daily-grid { grid-template-columns: 1fr; gap: 0.5rem; }
   .day-tab-btn { padding: 0.45rem 0.45rem; font-size: 0.67rem; }
@@ -1435,8 +1438,11 @@ body {
   .header-nav-bar { padding: 0.2rem 0.75rem; }
   .view-tabs { flex-basis: auto; }
   .tab { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-  .brand-name { display: none; }
-  .soroka-logo-img { height: 26px; }
+  .brand-primary { font-size: 0.72rem; }
+  .brand-secondary { display: none; }
+  .brand-icon { width: 24px; height: 24px; }
+  .brand-icon svg { width: 13px; height: 13px; }
+  .soroka-logo-img { height: 24px; }
 
   /* Collapse stats bar to minimal height */
   #statsBarContainer { padding: 0.2rem 0; }
