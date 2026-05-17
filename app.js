@@ -511,8 +511,8 @@ function renderCell(dateStr, t, day) {
     <button class="cell-add-btn" data-date="${dateStr}" data-tid="${t.id}">+ הוסף מטופל</button>
   </div>`;
 
-  if (av !== AVAIL.AVAILABLE && av !== AVAIL.PARTIAL) {
-    const cls = { [AVAIL.VACATION]:'vacation', [AVAIL.SOROKA]:'soroka', [AVAIL.DAYOFF]:'dayoff' }[av] || '';
+  if (av !== AVAIL.AVAILABLE && av !== AVAIL.PARTIAL && av !== AVAIL.SOROKA) {
+    const cls = { [AVAIL.VACATION]:'vacation', [AVAIL.DAYOFF]:'dayoff' }[av] || '';
     const opt = CONSTRAINT_OPTIONS.find(o => o.avail === av);
     const pillStyle = opt ? `style="background:${opt.color}20;color:${opt.color};border-color:${opt.color}40"` : '';
     return `<td class="day-cell unavail-cell" data-date="${dateStr}" data-tid="${t.id}">
@@ -637,10 +637,10 @@ function renderDailyView() {
     const asns = day.assignments[t.id]  || [];
 
     let body;
-    if (av !== AVAIL.AVAILABLE && av !== AVAIL.PARTIAL) {
+    if (av !== AVAIL.AVAILABLE && av !== AVAIL.PARTIAL && av !== AVAIL.SOROKA) {
       const opt = CONSTRAINT_OPTIONS.find(o => o.avail === av);
       const pillStyle = opt ? `style="background:${opt.color}20;color:${opt.color};border-color:${opt.color}40"` : '';
-      const cls = { [AVAIL.VACATION]:'vacation', [AVAIL.SOROKA]:'soroka', [AVAIL.DAYOFF]:'dayoff' }[av] || '';
+      const cls = { [AVAIL.VACATION]:'vacation', [AVAIL.DAYOFF]:'dayoff' }[av] || '';
       body = `<div class="empty-card"><span class="unavail-pill ${cls}" ${pillStyle}>${AVAIL_LABEL[av]}</span></div>`;
     } else {
       const rows = asns.map(a => {
