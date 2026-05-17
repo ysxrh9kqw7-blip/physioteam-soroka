@@ -897,32 +897,6 @@ window.doAddDirect = function(dateStr, tid, pid) {
   checkPatientWarning(pid);
 };
 
-window.doAdd = function(dateStr, tid) {
-  const pid    = document.getElementById('modalPatientSel').value;
-  const status = document.getElementById('modalStatus').value;
-  const group  = document.getElementById('modalGroup').checked;
-
-  if (!pid) { showToast('אנא בחר מטופל'); return; }
-  if (isPatientDischarged(pid)) { closeModal('assignModal'); showDischargeWarning(pid); return; }
-
-  const day = ensureDay(dateStr);
-  if (!day.assignments[tid]) day.assignments[tid] = [];
-  day.assignments[tid].push({ pid, s: status });
-  if (group && !day.groups.includes(pid)) day.groups.push(pid);
-
-  saveState();
-  closeModal('assignModal');
-  renderCurrentView();
-  const newCount = day.assignments[tid].length;
-  const max      = getMaxForTherapist(tid);
-  if (newCount > max) {
-    showOverloadToast(getTherapist(tid).name, newCount, max);
-  } else {
-    showToast(`${getPatient(pid).name} שובץ/ה בהצלחה`);
-  }
-  checkPatientWarning(pid);
-};
-
 // ─── MODALS: EDIT ASSIGNMENT ──────────────────────────────────────────────────
 
 function openEditModal(dateStr, tid, pid) {
