@@ -1342,8 +1342,8 @@ body {
   /* Header */
   .header-logo-bar { padding: 0.35rem 0.75rem; }
   .header-nav-bar { padding: 0.3rem 0.75rem; }
-  .brand-secondary { display: none; }
-  .brand-primary { font-size: 0.85rem; }
+  .brand-primary { font-size: 0.82rem; }
+  .brand-secondary { font-size: 0.58rem; }
   .brand-icon { width: 30px; height: 30px; flex-shrink: 0; }
   .brand-icon svg { width: 17px; height: 17px; }
   .soroka-logo-img { height: 34px; }
@@ -1393,8 +1393,8 @@ body {
 @media (max-width: 480px) {
   :root { --panel-w: 95vw; --header-h: 80px; }
 
-  .brand-primary { font-size: 0.75rem; }
-  .brand-secondary { font-size: 0.55rem; }
+  .brand-primary { font-size: 0.72rem; }
+  .brand-secondary { font-size: 0.52rem; }
   .brand-icon { width: 26px; height: 26px; }
   .brand-icon svg { width: 14px; height: 14px; }
   .soroka-logo-img { height: 26px; }
@@ -1438,8 +1438,8 @@ body {
   .header-nav-bar { padding: 0.2rem 0.75rem; }
   .view-tabs { flex-basis: auto; }
   .tab { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-  .brand-primary { font-size: 0.72rem; }
-  .brand-secondary { display: none; }
+  .brand-primary { font-size: 0.7rem; }
+  .brand-secondary { font-size: 0.5rem; }
   .brand-icon { width: 24px; height: 24px; }
   .brand-icon svg { width: 13px; height: 13px; }
   .soroka-logo-img { height: 24px; }
