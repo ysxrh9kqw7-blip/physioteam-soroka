@@ -97,6 +97,19 @@ body {
   display: flex; align-items: center; gap: 0.625rem; flex-shrink: 0;
 }
 
+/* ברכת שלום */
+.header-greeting {
+  flex: 1;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  padding: 0 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* לוגו סורוקה */
 .soroka-brand {
   display: flex; align-items: center; flex-shrink: 0;
@@ -1362,9 +1375,7 @@ body {
   .panel-trigger { padding: 0.35rem 0.55rem; }
   .auto-assign-btn { font-size: 0; padding: 0.35rem 0.55rem; gap: 0; }
   .auto-assign-btn svg { width: 15px; height: 15px; }
-  .logout-btn span { display: none; }
-  .logout-btn { padding: 0.35rem 0.55rem; font-size: 0; }
-  .logout-btn svg { display: block; }
+  /* logout: icon-only only in portrait — see portrait media query below */
 
   /* Stats bar */
   #statsBarContainer { padding: 0.4rem 0; }
@@ -1424,8 +1435,13 @@ body {
   .conflict-sel { width: 100%; }
 }
 
-/* ── Portrait mobile: fix overlaps ── */
+/* ── Portrait mobile: fix overlaps + icon-only logout ── */
 @media (max-width: 768px) and (orientation: portrait) {
+  .logout-btn span { display: none; }
+  .logout-btn { padding: 0.35rem 0.55rem; font-size: 0; }
+  .logout-btn svg { display: block; }
+  .header-greeting { font-size: 0.72rem; }
+
   /* Daily total badge below tabs, not floating over them */
   .daily-day-tabs {
     flex-direction: column;

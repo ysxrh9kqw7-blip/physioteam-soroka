@@ -2410,11 +2410,25 @@ window.saveAllUserProfiles = async function() {
   } catch(e) { showToast('שגיאה בשמירת ההרשאות'); }
 };
 
+function _updateGreeting() {
+  const el = document.getElementById('headerGreeting');
+  if (!el) return;
+  if (!state.currentUser) { el.textContent = ''; return; }
+  const h = new Date().getHours();
+  const greet = h >= 5 && h < 12 ? 'בוקר טוב'
+              : h >= 12 && h < 17 ? 'צהריים טובים'
+              : h >= 17 && h < 21 ? 'ערב טוב'
+              : 'לילה טוב';
+  const name = state.currentUser.displayName || state.currentUser.email || '';
+  el.textContent = `${greet}, ${name}`;
+}
+
 function _updateUIForPermissions() {
   const autoBtn = document.getElementById('autoAssignBtn');
   if (autoBtn) autoBtn.style.display = canEdit() ? '' : 'none';
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.style.display = (_auth && state.currentUser) ? '' : 'none';
+  _updateGreeting();
 }
 
 let _appEventsBound = false;
