@@ -2334,6 +2334,11 @@ async function _renderUserManagement() {
     const profiles = doc.exists ? doc.data() : {};
     const entries  = Object.entries(profiles).filter(([k]) => !k.startsWith('_'));
 
+    if (!entries.length) {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem">אין משתמשים רשומים</div>';
+      return;
+    }
+
     // Map therapistId → user entry
     const byTherapist = {};
     const unlinked    = [];
@@ -2347,14 +2352,11 @@ async function _renderUserManagement() {
 
     const roleSelect = (uid, role) => `
       <select class="sp-input sp-user-role" data-uid="${uid}"
-              style="font-size:0.78rem;padding:0.2rem 0.4rem;min-width:82px;flex-shrink:0">
+              style="font-size:0.8rem;padding:0.25rem 0.5rem;min-width:88px;flex-shrink:0">
         <option value="admin"    ${role==='admin'    ? 'selected':''}>מנהל</option>
         <option value="editor"   ${role==='editor'   ? 'selected':''}>עורך</option>
         <option value="readonly" ${role==='readonly' ? 'selected':''}>צפייה</option>
-      </select>
-      <button class="sp-add-btn"
-              style="padding:0.25rem 0.5rem;font-size:0.75rem;flex-shrink:0"
-              onclick="saveUserProfile('${uid}')">שמור</button>`;
+      </select>`;
 
     const therapistHtml = state.therapists.map(t => {
       const user = byTherapist[t.id];
@@ -2364,7 +2366,7 @@ async function _renderUserManagement() {
           <div class="sp-user-name">${t.name}</div>
           ${user ? `<div class="sp-user-email">${user.email}</div>` : '<div class="sp-user-email" style="color:#CBD5E1">לא רשום/ה</div>'}
         </div>
-        ${user ? roleSelect(user.uid, user.role) : ''}
+        ${user ? roleSelect(user.uid, user.role) : `<span style="font-size:0.75rem;color:#CBD5E1;min-width:88px;text-align:center">—</span>`}
       </div>`;
     }).join('');
 
@@ -2383,30 +2385,40 @@ async function _renderUserManagement() {
           ${roleSelect(u.uid, u.role)}
         </div>`).join('')}` : '';
 
-    el.innerHTML = (therapistHtml + unlinkedHtml) ||
-      '<div style="color:var(--text-muted);font-size:0.8rem">אין משתמשים רשומים</div>';
+    el.innerHTML = therapistHtml + unlinkedHtml +
+      `<button class="sp-add-btn" onclick="saveAllUserProfiles()"
+               style="width:100%;margin-top:0.75rem;padding:0.5rem;font-size:0.82rem">
+         שמור שינויים
+       </button>`;
   } catch(e) {
     if (el) el.innerHTML = '<div style="color:#DC2626;font-size:0.8rem">שגיאה בטעינת משתמשים</div>';
   }
 }
 
-window.saveUserProfile = async function(uid) {
-  const roleEl = document.querySelector(`.sp-user-role[data-uid="${uid}"]`);
-  if (!roleEl || !_db) return;
-  const role = roleEl.value;
+window.saveAllUserProfiles = async function() {
+  if (!_db) return;
+  const selects = document.querySelectorAll('#userMgmtContent .sp-user-role');
+  if (!selects.length) return;
   try {
     const doc = await _db.collection('physioTeam').doc('userProfiles').get();
     const profiles = doc.exists ? doc.data() : {};
-    if (profiles[uid]) {
-      profiles[uid].role = role;
-      await _db.collection('physioTeam').doc('userProfiles').set(profiles);
-      if (state.currentUser?.uid === uid) {
-        state.currentUser.role = role;
-        _updateUIForPermissions();
-        renderCurrentView();
+    let ownRoleChanged = false;
+    selects.forEach(sel => {
+      const uid = sel.dataset.uid;
+      if (profiles[uid]) {
+        profiles[uid].role = sel.value;
+        if (state.currentUser?.uid === uid) {
+          state.currentUser.role = sel.value;
+          ownRoleChanged = true;
+        }
       }
-      showToast('הרשאות עודכנו');
+    });
+    await _db.collection('physioTeam').doc('userProfiles').set(profiles);
+    if (ownRoleChanged) {
+      _updateUIForPermissions();
+      renderCurrentView();
     }
+    showToast('הרשאות עודכנו');
   } catch(e) { showToast('שגיאה בשמירת ההרשאות'); }
 };
 
