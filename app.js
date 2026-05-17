@@ -2419,7 +2419,8 @@ function _updateGreeting() {
               : h >= 12 && h < 17 ? 'צהריים טובים'
               : h >= 17 && h < 21 ? 'ערב טוב'
               : 'לילה טוב';
-  const name = state.currentUser.displayName || state.currentUser.email || '';
+  const fullName = state.currentUser.displayName || '';
+  const name = fullName ? fullName.trim().split(/\s+/)[0] : (state.currentUser.email || '');
   el.textContent = `${greet}, ${name}`;
 }
 
