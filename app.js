@@ -1721,7 +1721,7 @@ function buildOptionsPanel() {
     </div>` : ''}
 
     ${(isAdmin() && _db) ? `<div class="sp-add-section" id="userMgmtSection">
-      <div class="sp-add-title">הרשאות מטפלים</div>
+      <div class="sp-add-title">הרשאות משתמשים</div>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.6rem;line-height:1.5">
         מנהל — גישה מלאה &nbsp;·&nbsp; עורך — עריכת שיבוצים &nbsp;·&nbsp; צפייה — קריאה בלבד
       </div>
@@ -2335,57 +2335,33 @@ async function _renderUserManagement() {
     const entries  = Object.entries(profiles).filter(([k]) => !k.startsWith('_'));
 
     if (!entries.length) {
-      el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem">אין משתמשים רשומים</div>';
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0">אין משתמשים רשומים עדיין</div>';
       return;
     }
 
-    // Map therapistId → user entry
-    const byTherapist = {};
-    const unlinked    = [];
-    entries.forEach(([uid, p]) => {
-      if (p.therapistId && state.therapists.find(t => t.id === p.therapistId)) {
-        byTherapist[p.therapistId] = { uid, ...p };
-      } else {
-        unlinked.push({ uid, ...p });
-      }
-    });
+    const rows = entries.map(([uid, p]) => {
+      // Find linked therapist for color dot
+      const therapist = state.therapists.find(t => t.id === p.therapistId);
+      const dotColor  = therapist ? therapist.color : '#94A3B8';
+      const label     = therapist ? therapist.name : (p.displayName || p.email.split('@')[0]);
+      const isSelf    = state.currentUser?.uid === uid;
 
-    const roleSelect = (uid, role) => `
-      <select class="sp-input sp-user-role" data-uid="${uid}"
-              style="font-size:0.8rem;padding:0.25rem 0.5rem;min-width:88px;flex-shrink:0">
-        <option value="admin"    ${role==='admin'    ? 'selected':''}>מנהל</option>
-        <option value="editor"   ${role==='editor'   ? 'selected':''}>עורך</option>
-        <option value="readonly" ${role==='readonly' ? 'selected':''}>צפייה</option>
-      </select>`;
-
-    const therapistHtml = state.therapists.map(t => {
-      const user = byTherapist[t.id];
       return `<div class="sp-user-row">
-        <span class="sp-user-dot" style="background:${t.color}"></span>
+        <span class="sp-user-dot" style="background:${dotColor}"></span>
         <div class="sp-user-info" style="flex:1;min-width:0">
-          <div class="sp-user-name">${t.name}</div>
-          ${user ? `<div class="sp-user-email">${user.email}</div>` : '<div class="sp-user-email" style="color:#CBD5E1">לא רשום/ה</div>'}
+          <div class="sp-user-name">${label}${isSelf ? ' <span style="font-size:0.65rem;color:var(--primary);font-weight:600">(אתה)</span>' : ''}</div>
+          <div class="sp-user-email">${p.email}</div>
         </div>
-        ${user ? roleSelect(user.uid, user.role) : `<span style="font-size:0.75rem;color:#CBD5E1;min-width:88px;text-align:center">—</span>`}
+        <select class="sp-input sp-user-role" data-uid="${uid}"
+                style="font-size:0.8rem;padding:0.25rem 0.5rem;min-width:90px;flex-shrink:0">
+          <option value="admin"    ${p.role==='admin'    ? 'selected':''}>מנהל</option>
+          <option value="editor"   ${p.role==='editor'   ? 'selected':''}>עורך</option>
+          <option value="readonly" ${p.role==='readonly' ? 'selected':''}>צפייה</option>
+        </select>
       </div>`;
     }).join('');
 
-    const unlinkedHtml = unlinked.length ? `
-      <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);
-                  margin:0.75rem 0 0.4rem;padding-top:0.6rem;border-top:1px solid var(--border)">
-        חשבונות נוספים
-      </div>
-      ${unlinked.map(u => `
-        <div class="sp-user-row">
-          <span class="sp-user-dot" style="background:#94A3B8"></span>
-          <div class="sp-user-info" style="flex:1;min-width:0">
-            <div class="sp-user-name">${u.displayName || u.email}</div>
-            <div class="sp-user-email">${u.email}</div>
-          </div>
-          ${roleSelect(u.uid, u.role)}
-        </div>`).join('')}` : '';
-
-    el.innerHTML = therapistHtml + unlinkedHtml +
+    el.innerHTML = rows +
       `<button class="sp-add-btn" onclick="saveAllUserProfiles()"
                style="width:100%;margin-top:0.75rem;padding:0.5rem;font-size:0.82rem">
          שמור שינויים
