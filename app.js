@@ -2330,33 +2330,42 @@ async function _renderUserManagement() {
   const el = document.getElementById('userMgmtContent');
   if (!el || !_db) return;
   try {
-    const doc = await _db.collection('physioTeam').doc('userProfiles').get();
+    const doc  = await _db.collection('physioTeam').doc('userProfiles').get();
     const profiles = doc.exists ? doc.data() : {};
-    const entries  = Object.entries(profiles).filter(([k]) => !k.startsWith('_'));
 
-    if (!entries.length) {
-      el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0">אין משתמשים רשומים עדיין</div>';
-      return;
-    }
+    // Build therapistId → registered user map
+    const byTherapist = {};
+    Object.entries(profiles).forEach(([uid, p]) => {
+      if (uid.startsWith('_')) return;
+      if (p.therapistId) byTherapist[p.therapistId] = { uid, ...p };
+    });
 
-    const rows = entries.map(([uid, p]) => {
-      // Find linked therapist for color dot
-      const therapist = state.therapists.find(t => t.id === p.therapistId);
-      const dotColor  = therapist ? therapist.color : '#94A3B8';
-      const label     = therapist ? therapist.name : (p.displayName || p.email.split('@')[0]);
-      const isSelf    = state.currentUser?.uid === uid;
+    // Pending roles (for therapists not yet registered)
+    const pending = profiles['_therapistRoles'] || {};
+
+    const rows = state.therapists.map(t => {
+      const user        = byTherapist[t.id];
+      const currentRole = user ? user.role : (pending[t.id] || 'readonly');
+      const isSelf      = user && state.currentUser?.uid === user.uid;
 
       return `<div class="sp-user-row">
-        <span class="sp-user-dot" style="background:${dotColor}"></span>
-        <div class="sp-user-info" style="flex:1;min-width:0">
-          <div class="sp-user-name">${label}${isSelf ? ' <span style="font-size:0.65rem;color:var(--primary);font-weight:600">(אתה)</span>' : ''}</div>
-          <div class="sp-user-email">${p.email}</div>
+        <span class="sp-user-dot" style="background:${t.color}"></span>
+        <div class="sp-user-info" style="flex:1;min-width:0;overflow:hidden">
+          <div class="sp-user-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${t.name}${isSelf ? ' <span style="font-size:0.62rem;color:var(--primary);font-weight:600">(אתה)</span>' : ''}
+          </div>
+          ${user
+            ? `<div class="sp-user-email">${user.email}</div>`
+            : `<div class="sp-user-email" style="color:#CBD5E1;font-style:italic">טרם נרשם/ה</div>`}
         </div>
-        <select class="sp-input sp-user-role" data-uid="${uid}"
-                style="font-size:0.8rem;padding:0.25rem 0.5rem;min-width:90px;flex-shrink:0">
-          <option value="admin"    ${p.role==='admin'    ? 'selected':''}>מנהל</option>
-          <option value="editor"   ${p.role==='editor'   ? 'selected':''}>עורך</option>
-          <option value="readonly" ${p.role==='readonly' ? 'selected':''}>צפייה</option>
+        <select class="sp-user-role" data-tid="${t.id}" ${user ? `data-uid="${user.uid}"` : ''}
+                style="font-size:0.8rem;padding:0.25rem 0.35rem;width:82px;flex-shrink:0;
+                       border:1.5px solid var(--border);border-radius:8px;
+                       font-family:'Heebo',sans-serif;background:white;color:var(--text);
+                       cursor:pointer">
+          <option value="admin"    ${currentRole==='admin'    ? 'selected':''}>מנהל</option>
+          <option value="editor"   ${currentRole==='editor'   ? 'selected':''}>עורך</option>
+          <option value="readonly" ${currentRole==='readonly' ? 'selected':''}>צפייה</option>
         </select>
       </div>`;
     }).join('');
@@ -2378,22 +2387,25 @@ window.saveAllUserProfiles = async function() {
   try {
     const doc = await _db.collection('physioTeam').doc('userProfiles').get();
     const profiles = doc.exists ? doc.data() : {};
+    if (!profiles['_therapistRoles']) profiles['_therapistRoles'] = {};
+
     let ownRoleChanged = false;
     selects.forEach(sel => {
-      const uid = sel.dataset.uid;
-      if (profiles[uid]) {
-        profiles[uid].role = sel.value;
+      const tid  = sel.dataset.tid;
+      const uid  = sel.dataset.uid;
+      const role = sel.value;
+      profiles['_therapistRoles'][tid] = role;   // store for future registration
+      if (uid && profiles[uid]) {
+        profiles[uid].role = role;
         if (state.currentUser?.uid === uid) {
-          state.currentUser.role = sel.value;
+          state.currentUser.role = role;
           ownRoleChanged = true;
         }
       }
     });
+
     await _db.collection('physioTeam').doc('userProfiles').set(profiles);
-    if (ownRoleChanged) {
-      _updateUIForPermissions();
-      renderCurrentView();
-    }
+    if (ownRoleChanged) { _updateUIForPermissions(); renderCurrentView(); }
     showToast('הרשאות עודכנו');
   } catch(e) { showToast('שגיאה בשמירת ההרשאות'); }
 };
