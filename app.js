@@ -1037,8 +1037,8 @@ function openEditModal(dateStr, tid, pid) {
     <div class="form-group">
       <label>תאריך שחרור <span style="font-weight:400;color:var(--text-muted)">(אופציונלי)</span></label>
       <input type="date" id="editPDischarge" value="${p.dischargeDate || ''}"
-             onchange="this.blur()" dir="ltr"
-             style="padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:Heebo,sans-serif;font-size:.875rem;width:100%;box-sizing:border-box;direction:ltr;text-align:left">
+             onchange="this.blur()"
+             style="padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:Heebo,sans-serif;font-size:.875rem;width:100%;box-sizing:border-box">
     </div>
     <div class="form-group" style="border-top:1px solid var(--border);padding-top:0.75rem;display:flex;gap:1.25rem">
       <label class="checkbox-label">
@@ -1192,10 +1192,10 @@ function openConstraintModal(dateStr, tid) {
 
     <div class="form-group" id="partialHoursGroup" style="${curAvail === AVAIL.PARTIAL ? '' : 'display:none'}">
       <label>שעות נוכחות במחלקה</label>
-      <div style="display:flex;align-items:center;gap:0.5rem;direction:ltr">
-        <input type="time" id="cFromHour" value="${extra.fromHour || '08:00'}" class="sp-input" dir="ltr" style="flex:1">
-        <span style="color:var(--text-muted);font-size:0.85rem">–</span>
-        <input type="time" id="cToHour"   value="${extra.toHour   || '14:00'}" class="sp-input" dir="ltr" style="flex:1">
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <input type="time" id="cFromHour" value="${extra.fromHour || '08:00'}" class="sp-input" style="flex:1">
+        <span style="color:var(--text-muted);font-size:0.85rem">עד</span>
+        <input type="time" id="cToHour"   value="${extra.toHour   || '14:00'}" class="sp-input" style="flex:1">
       </div>
     </div>
 
@@ -1208,7 +1208,7 @@ function openConstraintModal(dateStr, tid) {
         <label class="recurrence-opt"><input type="radio" name="rec" value="until"        onchange="toggleUntilDate(this)"> התאמה אישית — עד תאריך</label>
       </div>
       <div id="untilDateWrap" style="display:none;margin-top:0.5rem">
-        <input type="date" id="cUntilDate" class="sp-input" dir="ltr" min="${dateStr}">
+        <input type="date" id="cUntilDate" class="sp-input" min="${dateStr}">
       </div>
     </div>
 
@@ -1439,8 +1439,8 @@ window.openEditPatientModal = function(pid) {
     <div class="form-group">
       <label>תאריך שחרור <span style="font-weight:400;color:var(--text-muted)">(אופציונלי)</span></label>
       <input type="date" id="editPDischarge" value="${p.dischargeDate || ''}"
-             onchange="this.blur()" dir="ltr"
-             style="padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:Heebo,sans-serif;font-size:.875rem;width:100%;box-sizing:border-box;direction:ltr;text-align:left">
+             onchange="this.blur()"
+             style="padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:Heebo,sans-serif;font-size:.875rem;width:100%;box-sizing:border-box">
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="savePatientEdit('${pid}')">שמור</button>
@@ -1647,7 +1647,7 @@ function buildPatientsPanel() {
         <option value="5">5</option>
       </select>
       <label style="font-size:0.72rem;font-weight:700;color:var(--text-muted);margin-bottom:2px;display:block">תאריך שחרור (אופציונלי)</label>
-      <input type="date" id="panelNewPatientDischarge" class="sp-input" dir="ltr" onchange="this.blur()" style="margin-bottom:.4rem;direction:ltr;text-align:left">
+      <input type="date" id="panelNewPatientDischarge" class="sp-input" onchange="this.blur()" style="margin-bottom:.4rem">
       <button class="sp-add-btn" onclick="addPatientFromPanel()">הוסף מטופל</button>
     </div>` : ''}`;
 }

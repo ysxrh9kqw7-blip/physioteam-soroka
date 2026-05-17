@@ -36,6 +36,14 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Force LTR for all time and date pickers — prevents reversed display in RTL context */
+input[type="time"],
+input[type="date"] {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: plaintext;
+}
+
 body {
   font-family: 'Heebo', sans-serif;
   background: linear-gradient(145deg, #EEF2FF 0%, #E0F2FE 55%, #E0F9F9 100%);
