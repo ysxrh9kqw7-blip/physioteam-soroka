@@ -1438,8 +1438,7 @@ body {
 /* ── Portrait mobile: fix overlaps + icon-only logout ── */
 @media (max-width: 768px) and (orientation: portrait) {
   .logout-btn span { display: none; }
-  .logout-btn { padding: 0.35rem 0.55rem; font-size: 0; }
-  .logout-btn svg { display: block; }
+  .logout-btn { padding: 0.35rem 0.55rem; }
   .header-greeting { font-size: 0.72rem; }
 
   /* Daily total badge below tabs, not floating over them */
