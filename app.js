@@ -198,37 +198,127 @@ let state = {
   settings: { maxPatientsPerDay: 7 },
 };
 
-// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+// ─── FIREBASE ─────────────────────────────────────────────────────────────────
 
-function loadState() {
+const _clientId = Math.random().toString(36).slice(2);
+let _db          = null;
+let _unsubscribe = null;
+let _localWriteInFlight = 0;
+
+function initFirebase() {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _db = firebase.firestore();
+  } catch(e) {
+    console.warn('Firebase init failed, using localStorage fallback:', e);
+    _db = null;
+  }
+}
+
+function _fsDoc() {
+  return _db.collection('physioTeam').doc('state');
+}
+
+function _showLoadingOverlay(visible) {
+  let el = document.getElementById('_fbOverlay');
+  if (!el && visible) {
+    el = document.createElement('div');
+    el.id = '_fbOverlay';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:0.75rem;font-family:Heebo,sans-serif;font-size:1rem;color:#2563EB;';
+    el.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.5" style="animation:_fbspin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><span>טוען נתונים...</span>';
+    const s = document.createElement('style');
+    s.textContent = '@keyframes _fbspin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+    document.body.appendChild(el);
+  }
+  if (el) el.style.display = visible ? 'flex' : 'none';
+}
+
+function _applyDoc(data) {
+  state.therapists = data.therapists || deepCopy(INIT_THERAPISTS);
+  state.patients   = data.patients   || deepCopy(INIT_PATIENTS);
+  state.schedule   = Object.assign({}, deepCopy(INIT_SCHEDULE), data.schedule || {});
+  state.settings   = Object.assign(
+    { maxPatientsPerDay: 7, departmentHour: { enabled: true, dayOfWeek: 0, fromTime: '12:00', toTime: '13:00' } },
+    data.settings || {}
+  );
+  if (!state.settings.departmentHour)
+    state.settings.departmentHour = { enabled: true, dayOfWeek: 0, fromTime: '12:00', toTime: '13:00' };
+  state.therapists.forEach(t => {
+    if (!t.constraints) t.constraints = { maxPerDay: null, blockedDays: [], specialties: '', notes: '' };
+  });
+  state.patients.forEach(p => {
+    if (p.primaryTherapist   === undefined) p.primaryTherapist   = null;
+    if (p.secondaryTherapist === undefined) p.secondaryTherapist = null;
+    if (p.treatmentsPerWeek  === undefined) p.treatmentsPerWeek  = null;
+    if (p.dischargeDate      === undefined) p.dischargeDate      = null;
+  });
+}
+
+function _loadFromLocalStorage() {
   try {
     const raw = localStorage.getItem('physioTeamSoroka_v1');
-    if (raw) {
-      const saved = JSON.parse(raw);
-      state.therapists = saved.therapists || deepCopy(INIT_THERAPISTS);
-      state.patients   = saved.patients   || deepCopy(INIT_PATIENTS);
-      state.schedule   = Object.assign({}, deepCopy(INIT_SCHEDULE), saved.schedule || {});
-      state.settings   = Object.assign({ maxPatientsPerDay: 7, departmentHour: { enabled: true, dayOfWeek: 0, fromTime: '12:00', toTime: '13:00' } }, saved.settings || {});
-      if (!state.settings.departmentHour) state.settings.departmentHour = { enabled: true, dayOfWeek: 0, fromTime: '12:00', toTime: '13:00' };
-      state.therapists.forEach(t => {
-        if (!t.constraints) t.constraints = { maxPerDay: null, blockedDays: [], specialties: '', notes: '' };
-      });
-      state.patients.forEach(p => {
-        if (p.primaryTherapist   === undefined) p.primaryTherapist   = null;
-        if (p.secondaryTherapist === undefined) p.secondaryTherapist = null;
-        if (p.treatmentsPerWeek  === undefined) p.treatmentsPerWeek  = null;
-        if (p.dischargeDate      === undefined) p.dischargeDate      = null;
-      });
+    if (raw) { _applyDoc(JSON.parse(raw)); purgeExpiredPatients(); }
+    else { state.therapists = deepCopy(INIT_THERAPISTS); state.patients = deepCopy(INIT_PATIENTS); state.schedule = deepCopy(INIT_SCHEDULE); }
+  } catch(e) {
+    state.therapists = deepCopy(INIT_THERAPISTS); state.patients = deepCopy(INIT_PATIENTS); state.schedule = deepCopy(INIT_SCHEDULE);
+  }
+}
+
+function _startListener() {
+  if (_unsubscribe) _unsubscribe();
+  _unsubscribe = _fsDoc().onSnapshot(doc => {
+    if (!doc.exists) return;
+    const data = doc.data();
+    if (data._clientId === _clientId && _localWriteInFlight > 0) {
+      _localWriteInFlight--;
+      return;
+    }
+    _applyDoc(data);
+    renderCurrentView();
+    if (state.activePanel) renderPanelContent(state.activePanel);
+  }, err => console.warn('Firestore listener error:', err));
+}
+
+async function _saveToFirestore() {
+  _localWriteInFlight++;
+  try {
+    await _fsDoc().set({
+      therapists: state.therapists,
+      patients:   state.patients,
+      schedule:   state.schedule,
+      settings:   state.settings,
+      _clientId:  _clientId,
+      _updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch(e) {
+    _localWriteInFlight = Math.max(0, _localWriteInFlight - 1);
+    console.warn('Firestore save failed:', e);
+  }
+}
+
+// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+
+async function loadState() {
+  if (!_db) { _loadFromLocalStorage(); return; }
+  _showLoadingOverlay(true);
+  try {
+    const doc = await _fsDoc().get();
+    if (doc.exists) {
+      _applyDoc(doc.data());
       purgeExpiredPatients();
     } else {
       state.therapists = deepCopy(INIT_THERAPISTS);
       state.patients   = deepCopy(INIT_PATIENTS);
       state.schedule   = deepCopy(INIT_SCHEDULE);
+      await _saveToFirestore();
     }
+    _startListener();
   } catch(e) {
-    state.therapists = deepCopy(INIT_THERAPISTS);
-    state.patients   = deepCopy(INIT_PATIENTS);
-    state.schedule   = deepCopy(INIT_SCHEDULE);
+    console.warn('Firestore load failed, falling back to localStorage:', e);
+    _loadFromLocalStorage();
+  } finally {
+    _showLoadingOverlay(false);
   }
 }
 
@@ -237,25 +327,27 @@ function purgeExpiredPatients() {
   const expired = state.patients.filter(p => p.dischargeDate && p.dischargeDate < today);
   if (!expired.length) return;
   const expiredIds = new Set(expired.map(p => p.id));
-  // Remove from schedule
   Object.values(state.schedule).forEach(day => {
     if (!day.assignments) return;
     Object.keys(day.assignments).forEach(tid => {
       day.assignments[tid] = (day.assignments[tid] || []).filter(a => !expiredIds.has(a.pid));
     });
   });
-  // Remove from patient list
   state.patients = state.patients.filter(p => !expiredIds.has(p.id));
 }
 
 function saveState() {
   purgeExpiredPatients();
-  localStorage.setItem('physioTeamSoroka_v1', JSON.stringify({
-    therapists: state.therapists,
-    patients:   state.patients,
-    schedule:   state.schedule,
-    settings:   state.settings,
-  }));
+  if (_db) {
+    _saveToFirestore();
+  } else {
+    localStorage.setItem('physioTeamSoroka_v1', JSON.stringify({
+      therapists: state.therapists,
+      patients:   state.patients,
+      schedule:   state.schedule,
+      settings:   state.settings,
+    }));
+  }
 }
 
 function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
@@ -2128,8 +2220,9 @@ window.applyAutoAssignConflicts = function() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadState();
+document.addEventListener('DOMContentLoaded', async () => {
+  initFirebase();
+  await loadState();
 
   const todayStr = fmtKey(new Date());
   if (!state.schedule[todayStr]) state.currentDate = new Date('2026-05-12');
