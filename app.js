@@ -1721,7 +1721,10 @@ function buildOptionsPanel() {
     </div>` : ''}
 
     ${(isAdmin() && _db) ? `<div class="sp-add-section" id="userMgmtSection">
-      <div class="sp-add-title">ניהול משתמשים</div>
+      <div class="sp-add-title">הרשאות מטפלים</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.6rem;line-height:1.5">
+        מנהל — גישה מלאה &nbsp;·&nbsp; עורך — עריכת שיבוצים &nbsp;·&nbsp; צפייה — קריאה בלבד
+      </div>
       <div id="userMgmtContent"><div style="color:var(--text-muted);font-size:0.8rem">טוען...</div></div>
     </div>` : ''}`;
 }
@@ -2329,55 +2332,82 @@ async function _renderUserManagement() {
   try {
     const doc = await _db.collection('physioTeam').doc('userProfiles').get();
     const profiles = doc.exists ? doc.data() : {};
-    const entries = Object.entries(profiles).filter(([k]) => !k.startsWith('_'));
-    if (!entries.length) {
-      el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem">אין משתמשים רשומים</div>';
-      return;
-    }
-    el.innerHTML = entries.map(([uid, p]) => `
-      <div class="sp-user-row" data-uid="${uid}">
-        <div class="sp-user-info">
-          <div class="sp-user-name">${p.displayName || p.email}</div>
-          <div class="sp-user-email">${p.email}</div>
+    const entries  = Object.entries(profiles).filter(([k]) => !k.startsWith('_'));
+
+    // Map therapistId → user entry
+    const byTherapist = {};
+    const unlinked    = [];
+    entries.forEach(([uid, p]) => {
+      if (p.therapistId && state.therapists.find(t => t.id === p.therapistId)) {
+        byTherapist[p.therapistId] = { uid, ...p };
+      } else {
+        unlinked.push({ uid, ...p });
+      }
+    });
+
+    const roleSelect = (uid, role) => `
+      <select class="sp-input sp-user-role" data-uid="${uid}"
+              style="font-size:0.78rem;padding:0.2rem 0.4rem;min-width:82px;flex-shrink:0">
+        <option value="admin"    ${role==='admin'    ? 'selected':''}>מנהל</option>
+        <option value="editor"   ${role==='editor'   ? 'selected':''}>עורך</option>
+        <option value="readonly" ${role==='readonly' ? 'selected':''}>צפייה</option>
+      </select>
+      <button class="sp-add-btn"
+              style="padding:0.25rem 0.5rem;font-size:0.75rem;flex-shrink:0"
+              onclick="saveUserProfile('${uid}')">שמור</button>`;
+
+    const therapistHtml = state.therapists.map(t => {
+      const user = byTherapist[t.id];
+      return `<div class="sp-user-row">
+        <span class="sp-user-dot" style="background:${t.color}"></span>
+        <div class="sp-user-info" style="flex:1;min-width:0">
+          <div class="sp-user-name">${t.name}</div>
+          ${user ? `<div class="sp-user-email">${user.email}</div>` : '<div class="sp-user-email" style="color:#CBD5E1">לא רשום/ה</div>'}
         </div>
-        <select class="sp-input sp-user-role" data-uid="${uid}" style="font-size:0.78rem;padding:0.2rem 0.4rem;min-width:90px">
-          <option value="admin"    ${p.role==='admin'    ? 'selected':''}>מנהל</option>
-          <option value="editor"   ${p.role==='editor'   ? 'selected':''}>עורך</option>
-          <option value="readonly" ${p.role==='readonly' ? 'selected':''}>צפייה</option>
-        </select>
-        <select class="sp-input sp-user-therapist" data-uid="${uid}" style="font-size:0.78rem;padding:0.2rem 0.4rem;min-width:75px">
-          <option value="">— ללא —</option>
-          ${state.therapists.map(t => `<option value="${t.id}" ${p.therapistId===t.id?'selected':''}>${t.name}</option>`).join('')}
-        </select>
-        <button class="sp-add-btn" style="padding:0.25rem 0.5rem;font-size:0.75rem;flex-shrink:0" onclick="saveUserProfile('${uid}')">שמור</button>
-      </div>`).join('');
+        ${user ? roleSelect(user.uid, user.role) : ''}
+      </div>`;
+    }).join('');
+
+    const unlinkedHtml = unlinked.length ? `
+      <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);
+                  margin:0.75rem 0 0.4rem;padding-top:0.6rem;border-top:1px solid var(--border)">
+        חשבונות נוספים
+      </div>
+      ${unlinked.map(u => `
+        <div class="sp-user-row">
+          <span class="sp-user-dot" style="background:#94A3B8"></span>
+          <div class="sp-user-info" style="flex:1;min-width:0">
+            <div class="sp-user-name">${u.displayName || u.email}</div>
+            <div class="sp-user-email">${u.email}</div>
+          </div>
+          ${roleSelect(u.uid, u.role)}
+        </div>`).join('')}` : '';
+
+    el.innerHTML = (therapistHtml + unlinkedHtml) ||
+      '<div style="color:var(--text-muted);font-size:0.8rem">אין משתמשים רשומים</div>';
   } catch(e) {
     if (el) el.innerHTML = '<div style="color:#DC2626;font-size:0.8rem">שגיאה בטעינת משתמשים</div>';
   }
 }
 
 window.saveUserProfile = async function(uid) {
-  const roleEl      = document.querySelector(`.sp-user-role[data-uid="${uid}"]`);
-  const therapistEl = document.querySelector(`.sp-user-therapist[data-uid="${uid}"]`);
-  if (!roleEl || !therapistEl || !_db) return;
+  const roleEl = document.querySelector(`.sp-user-role[data-uid="${uid}"]`);
+  if (!roleEl || !_db) return;
   const role = roleEl.value;
-  const therapistId = therapistEl.value || null;
   try {
     const doc = await _db.collection('physioTeam').doc('userProfiles').get();
     const profiles = doc.exists ? doc.data() : {};
     if (profiles[uid]) {
       profiles[uid].role = role;
-      profiles[uid].therapistId = therapistId;
       await _db.collection('physioTeam').doc('userProfiles').set(profiles);
       if (state.currentUser?.uid === uid) {
         state.currentUser.role = role;
-        state.currentUser.therapistId = therapistId;
         _updateUIForPermissions();
         renderCurrentView();
       }
-      showToast('פרופיל משתמש עודכן');
+      showToast('הרשאות עודכנו');
     }
-  } catch(e) { showToast('שגיאה בשמירת הפרופיל'); }
+  } catch(e) { showToast('שגיאה בשמירת ההרשאות'); }
 };
 
 function _updateUIForPermissions() {

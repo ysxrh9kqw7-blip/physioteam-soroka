@@ -1562,14 +1562,17 @@ body {
 
 /* User management rows */
 .sp-user-row {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.5rem 0; border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.45rem 0; border-bottom: 1px solid var(--border);
 }
 .sp-user-row:last-child { border-bottom: none; }
-.sp-user-info { flex: 1; min-width: 0; }
+.sp-user-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 1px;
+}
+.sp-user-info { min-width: 0; }
 .sp-user-name { font-size: 0.82rem; font-weight: 700; color: var(--text); }
-.sp-user-email { font-size: 0.7rem; color: var(--text-muted); }
+.sp-user-email { font-size: 0.68rem; color: var(--text-muted); }
 
 /* ─── PRINT ─── */
 @media print {
