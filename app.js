@@ -196,22 +196,33 @@ let state = {
   patients: [],
   schedule: {},
   settings: { maxPatientsPerDay: 7 },
+  currentUser: null,
 };
+
+// ─── PERMISSIONS ──────────────────────────────────────────────────────────────
+
+const canEdit            = () => !state.currentUser || state.currentUser.role !== 'readonly';
+const canEditPatients    = () => !state.currentUser || ['admin','editor'].includes(state.currentUser.role);
+const isAdmin            = () => !state.currentUser || state.currentUser.role === 'admin';
+const isOwnTherapist     = (tid) => state.currentUser?.therapistId === tid;
+const canEditConstraints = (tid) => !state.currentUser || isAdmin() || isOwnTherapist(tid);
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 
 const _clientId = Math.random().toString(36).slice(2);
 let _db          = null;
+let _auth        = null;
 let _unsubscribe = null;
 let _localWriteInFlight = 0;
 
 function initFirebase() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
-    _db = firebase.firestore();
+    _db   = firebase.firestore();
+    _auth = firebase.auth();
   } catch(e) {
     console.warn('Firebase init failed, using localStorage fallback:', e);
-    _db = null;
+    _db = null; _auth = null;
   }
 }
 
@@ -540,8 +551,8 @@ function renderWeeklyView() {
   const ws    = weekStart(state.currentDate);
   const dates = weekDates(ws);
 
-  document.getElementById('periodTitle').textContent =
-    `${fmtDisplay(dates[0])} – ${fmtDisplay(dates[4])}/${dates[0].getFullYear()}`;
+  document.getElementById('periodTitle').innerHTML =
+    `<span dir="ltr">${fmtDisplay(dates[0])} – ${fmtDisplay(dates[4])}/${dates[0].getFullYear()}</span>`;
 
   document.getElementById('statsBarContainer').innerHTML = renderStatsBar();
 
@@ -598,10 +609,11 @@ function renderCell(dateStr, t, day) {
   const isOverLimit = asns.length > max;
 
   const isUnavail = av === AVAIL.VACATION || av === AVAIL.DAYOFF;
-  const constraintBtn = `<button class="cell-constraint-btn" data-date="${dateStr}" data-tid="${t.id}" title="הגדר אילוץ">אילוצים</button>`;
-  const cellFooter = isUnavail ? '' : `<div class="cell-footer">
+  const constraintBtn = canEditConstraints(t.id)
+    ? `<button class="cell-constraint-btn" data-date="${dateStr}" data-tid="${t.id}" title="הגדר אילוץ">אילוצים</button>` : '';
+  const cellFooter = (!isUnavail && canEdit()) ? `<div class="cell-footer">
     <button class="cell-add-btn" data-date="${dateStr}" data-tid="${t.id}">+ הוסף מטופל</button>
-  </div>`;
+  </div>` : '';
 
   if (av !== AVAIL.AVAILABLE && av !== AVAIL.PARTIAL && av !== AVAIL.SOROKA) {
     const cls = { [AVAIL.VACATION]:'vacation', [AVAIL.DAYOFF]:'dayoff' }[av] || '';
@@ -621,7 +633,7 @@ function renderCell(dateStr, t, day) {
   // Partial presence hours badge
   const extra = (day.availExtra || {})[t.id] || {};
   const partialBadge = av === AVAIL.PARTIAL
-    ? `<span class="partial-hours-pill">${extra.fromHour || ''}${extra.toHour ? '–'+extra.toHour : ''}</span>` : '';
+    ? `<span class="partial-hours-pill" dir="ltr">${extra.fromHour || ''}${extra.toHour ? '–'+extra.toHour : ''}</span>` : '';
 
   const chips = asns.map(a => {
     const p = getPatient(a.pid);
@@ -641,9 +653,9 @@ function renderCell(dateStr, t, day) {
       ${a.group  ? '<span class="chip-badge chip-badge-group">קבוצתי</span>' : ''}
     </span>` : '';
     return `<span class="patient-chip"
-                  draggable="true"
+                  ${canEdit() ? 'draggable="true"' : ''}
                   data-date="${dateStr}" data-tid="${t.id}" data-pid="${a.pid}"
-                  ondragstart="chipDragStart(event)" ondragend="chipDragEnd(event)"
+                  ${canEdit() ? 'ondragstart="chipDragStart(event)" ondragend="chipDragEnd(event)"' : ''}
                   ${chipStyle ? `style="${chipStyle}"` : ''}>
       <span class="chip-name">${p.name}</span>${badges}
     </span>`;
@@ -656,7 +668,7 @@ function renderCell(dateStr, t, day) {
   const dh = state.settings.departmentHour;
   const deptChip = (dh && dh.enabled && dow === dh.dayOfWeek)
     ? `<span class="patient-chip dept-hour-chip" style="background:${DEPT_HOUR_COLOR}18;border-color:${DEPT_HOUR_COLOR}55;color:${DEPT_HOUR_COLOR}">
-        שעת מחלקה ${dh.fromTime}–${dh.toTime}
+        שעת מחלקה <span dir="ltr">${dh.fromTime}–${dh.toTime}</span>
       </span>` : '';
 
   const overloadCls = isOverLimit ? ' overload-cell' : '';
@@ -750,19 +762,20 @@ function renderDailyView() {
         if (p.treatmentsPerWeek && getWeekTreatmentCount(p.id, dateStr) !== p.treatmentsPerWeek) {
           rowStyle += 'box-shadow:0 0 0 1.5px #EF4444;';
         }
-        return `<div class="patient-row" draggable="true"
+        return `<div class="patient-row"
+                     ${canEdit() ? 'draggable="true"' : ''}
                      data-date="${dateStr}" data-tid="${t.id}" data-pid="${a.pid}"
-                     ondragstart="chipDragStart(event)" ondragend="chipDragEnd(event)"
+                     ${canEdit() ? 'ondragstart="chipDragStart(event)" ondragend="chipDragEnd(event)"' : ''}
                      ${rowStyle ? `style="${rowStyle}"` : ''}>
           <span class="patient-row-name">${p.name}</span>
           <div class="mini-badges">${badges.join('')}</div>
         </div>`;
       }).join('');
 
+      const addBtn = canEdit() ? `<button class="card-add-btn" data-date="${dateStr}" data-tid="${t.id}">+ הוסף מטופל</button>` : '';
       body = asns.length
-        ? rows + `<button class="card-add-btn" data-date="${dateStr}" data-tid="${t.id}">+ הוסף מטופל</button>`
-        : `<div class="empty-card">אין מטופלים משובצים</div>
-           <button class="card-add-btn" data-date="${dateStr}" data-tid="${t.id}">+ הוסף מטופל</button>`;
+        ? rows + addBtn
+        : `<div class="empty-card">אין מטופלים משובצים</div>${addBtn}`;
     }
 
     const max         = getMaxForTherapist(t.id);
@@ -780,7 +793,7 @@ function renderDailyView() {
             ${t.name}
           </div>
         </div>
-        <button class="card-constraint-btn" data-date="${dateStr}" data-tid="${t.id}" title="הגדר אילוץ">אילוצים</button>
+        ${canEditConstraints(t.id) ? `<button class="card-constraint-btn" data-date="${dateStr}" data-tid="${t.id}" title="הגדר אילוץ">אילוצים</button>` : ''}
       </div>
       <div class="therapist-card-body">${body}</div>
     </div>`;
@@ -1494,7 +1507,10 @@ function renderPanelContent(type) {
   const body = document.getElementById('spBody');
   if (type === 'therapists') body.innerHTML = buildTherapistsPanel();
   else if (type === 'patients') { body.innerHTML = buildPatientsPanel(); }
-  else if (type === 'options') body.innerHTML = buildOptionsPanel();
+  else if (type === 'options') {
+    body.innerHTML = buildOptionsPanel();
+    if (isAdmin() && _db) setTimeout(() => _renderUserManagement(), 0);
+  }
 }
 
 function buildTherapistsPanel() {
@@ -1544,20 +1560,20 @@ function buildTherapistsPanel() {
         </div>
         <div class="sp-week-days">${dayBtns}</div>
       </div>
-      <button class="sp-btn danger" onclick="deleteTherapist('${t.id}')" title="מחק מטפל">
+      ${isAdmin() ? `<button class="sp-btn danger" onclick="deleteTherapist('${t.id}')" title="מחק מטפל">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4h6v2"/></svg>
-      </button>
+      </button>` : ''}
     </div>`;
   }).join('');
 
   return `<div class="sp-list">${rows}</div>
-    <div class="sp-add-section">
+    ${isAdmin() ? `<div class="sp-add-section">
       <div class="sp-add-title">הוסף מטפל חדש</div>
       <div class="sp-inline-row">
         <input type="text" id="panelNewTherapist" placeholder="שם המטפל" class="sp-input">
         <button class="sp-add-btn" onclick="addTherapistFromPanel()">הוסף</button>
       </div>
-    </div>`;
+    </div>` : ''}`;
 }
 
 window.updateMaxPerDay = function(tid, val) {
@@ -1598,18 +1614,18 @@ function buildPatientsPanel() {
         })()}
       </div>
       <div class="sp-item-actions">
-        <button class="sp-btn" onclick="openEditPatientModal('${p.id}')" title="ערוך">
+        ${canEditPatients() ? `<button class="sp-btn" onclick="openEditPatientModal('${p.id}')" title="ערוך">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button class="sp-btn danger" onclick="deletePatient('${p.id}')" title="מחק">
+        </button>` : ''}
+        ${isAdmin() ? `<button class="sp-btn danger" onclick="deletePatient('${p.id}')" title="מחק">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4h6v2"/></svg>
-        </button>
+        </button>` : ''}
       </div>
     </div>`;
   }).join('');
 
   return `<div class="sp-list" id="patientsPanelList">${rows}</div>
-    <div class="sp-add-section">
+    ${canEditPatients() ? `<div class="sp-add-section">
       <div class="sp-add-title">הוסף מטופל חדש</div>
       <label class="sp-field-label">שם מטופל</label>
       <input type="text" id="panelNewPatientName" placeholder="הכנס שם" class="sp-input" style="margin-bottom:.6rem">
@@ -1633,12 +1649,12 @@ function buildPatientsPanel() {
       <label style="font-size:0.72rem;font-weight:700;color:var(--text-muted);margin-bottom:2px;display:block">תאריך שחרור (אופציונלי)</label>
       <input type="date" id="panelNewPatientDischarge" class="sp-input" onchange="this.blur()" style="margin-bottom:.4rem">
       <button class="sp-add-btn" onclick="addPatientFromPanel()">הוסף מטופל</button>
-    </div>`;
+    </div>` : ''}`;
 }
 
 function buildOptionsPanel() {
   return `
-    <div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem;margin-bottom:0">
+    ${isAdmin() ? `<div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem;margin-bottom:0">
       <label style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-mid);margin-bottom:0.5rem">
         מגבלת מטופלים יומית (ברירת מחדל)
       </label>
@@ -1651,9 +1667,9 @@ function buildOptionsPanel() {
         ניתן לקבוע מגבלה אישית לכל מטפל דרך פאנל המטפלים.<br>
         המגבלה האישית מבטלת את ברירת המחדל.
       </div>
-    </div>
+    </div>` : ''}
 
-    <div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem">
+    ${isAdmin() ? `<div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem">
       <label style="display:block;font-size:0.82rem;font-weight:700;color:var(--text-mid);margin-bottom:0.5rem">
         שעת מחלקה
       </label>
@@ -1664,23 +1680,23 @@ function buildOptionsPanel() {
                   onclick="selectDeptDay(${i}, this)">${name}</button>`).join('')}
       </div>
       <label class="sp-field-label">שעות</label>
-      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.6rem">
+      <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.6rem;direction:ltr">
         <input type="time" id="deptHourFrom" value="${state.settings.departmentHour?.fromTime || '12:00'}" class="sp-input" style="flex:1">
-        <span style="color:var(--text-muted);font-size:0.8rem">עד</span>
+        <span style="color:var(--text-muted);font-size:0.8rem">–</span>
         <input type="time" id="deptHourTo"   value="${state.settings.departmentHour?.toTime   || '13:00'}" class="sp-input" style="flex:1">
       </div>
       <button class="sp-add-btn" onclick="saveDepartmentHour()">שמור</button>
-    </div>
+    </div>` : ''}
 
-    <div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem">
+    ${isAdmin() ? `<div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem">
       <div class="sp-add-title">הוסף מטפל חדש</div>
       <div class="sp-inline-row">
         <input type="text" id="optionsNewTherapist" placeholder="שם המטפל" class="sp-input">
         <button class="sp-add-btn" onclick="addTherapistFromOptions()">הוסף</button>
       </div>
-    </div>
+    </div>` : ''}
 
-    <div class="sp-add-section">
+    ${canEditPatients() ? `<div class="sp-add-section" style="border-bottom:1px solid var(--border);padding-bottom:1rem">
       <div class="sp-add-title">הוסף מטופל חדש</div>
       <label class="sp-field-label">שם מטופל</label>
       <input type="text" id="optionsNewPatientName" placeholder="הכנס שם" class="sp-input" style="margin-bottom:.6rem">
@@ -1702,7 +1718,12 @@ function buildOptionsPanel() {
         <option value="5">5</option>
       </select>
       <button class="sp-add-btn" onclick="addPatientFromOptions()">הוסף מטופל</button>
-    </div>`;
+    </div>` : ''}
+
+    ${(isAdmin() && _db) ? `<div class="sp-add-section" id="userMgmtSection">
+      <div class="sp-add-title">ניהול משתמשים</div>
+      <div id="userMgmtContent"><div style="color:var(--text-muted);font-size:0.8rem">טוען...</div></div>
+    </div>` : ''}`;
 }
 
 window.addTherapistFromOptions = function() {
@@ -2218,27 +2239,164 @@ window.applyAutoAssignConflicts = function() {
   showToast('שיבוץ אוטומטי הושלם');
 };
 
-// ─── INIT ─────────────────────────────────────────────────────────────────────
+// ─── AUTH & INIT ──────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', async () => {
-  initFirebase();
-  await loadState();
+async function _loadUserProfile(user) {
+  try {
+    const profilesDoc = await _db.collection('physioTeam').doc('userProfiles').get();
+    const profiles = profilesDoc.exists ? profilesDoc.data() : {};
+    if (profiles[user.uid]) {
+      state.currentUser = { uid: user.uid, ...profiles[user.uid] };
+    } else {
+      const existingCount = Object.keys(profiles).filter(k => !k.startsWith('_')).length;
+      const role = existingCount === 0 ? 'admin' : 'readonly';
+      const newProfile = {
+        email: user.email,
+        displayName: user.displayName || user.email,
+        role,
+        therapistId: null,
+      };
+      state.currentUser = { uid: user.uid, ...newProfile };
+      profiles[user.uid] = newProfile;
+      await _db.collection('physioTeam').doc('userProfiles').set(profiles);
+    }
+  } catch(e) {
+    console.warn('Could not load user profile:', e);
+    state.currentUser = { uid: user.uid, email: user.email, displayName: user.displayName || user.email, role: 'admin', therapistId: null };
+  }
+}
 
-  const todayStr = fmtKey(new Date());
-  if (!state.schedule[todayStr]) state.currentDate = new Date('2026-05-12');
+function bindLoginUI() {
+  const errEl = document.getElementById('loginError');
 
-  // View tabs
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    errEl.textContent = '';
+    if (!email || !password) { errEl.textContent = 'נא למלא אימייל וסיסמה'; return; }
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    try {
+      await _auth.signInWithEmailAndPassword(email, password);
+    } catch(e) {
+      btn.disabled = false;
+      errEl.textContent = ({
+        'auth/user-not-found':      'משתמש לא נמצא',
+        'auth/wrong-password':      'סיסמה שגויה',
+        'auth/invalid-email':       'אימייל לא תקין',
+        'auth/invalid-credential':  'אימייל או סיסמה שגויים',
+        'auth/too-many-requests':   'יותר מדי ניסיונות. נסה שוב מאוחר יותר',
+      })[e.code] || 'שגיאת כניסה';
+    }
+  });
+
+  document.getElementById('loginPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('loginBtn').click();
+  });
+
+  document.getElementById('showSignupLink').addEventListener('click', e => {
+    e.preventDefault();
+    const s = document.getElementById('signupSection');
+    s.style.display = s.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('signupBtn').addEventListener('click', async () => {
+    const name     = document.getElementById('signupName').value.trim();
+    const email    = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    errEl.textContent = '';
+    if (!name || !email || !password) { errEl.textContent = 'נא למלא את כל השדות'; return; }
+    if (password.length < 6) { errEl.textContent = 'הסיסמה חייבת להכיל לפחות 6 תווים'; return; }
+    const btn = document.getElementById('signupBtn');
+    btn.disabled = true;
+    try {
+      const cred = await _auth.createUserWithEmailAndPassword(email, password);
+      await cred.user.updateProfile({ displayName: name });
+    } catch(e) {
+      btn.disabled = false;
+      errEl.textContent = ({
+        'auth/email-already-in-use': 'כתובת האימייל כבר בשימוש',
+        'auth/invalid-email':        'אימייל לא תקין',
+        'auth/weak-password':        'הסיסמה חלשה מדי (לפחות 6 תווים)',
+      })[e.code] || 'שגיאת הרשמה';
+    }
+  });
+}
+
+async function _renderUserManagement() {
+  const el = document.getElementById('userMgmtContent');
+  if (!el || !_db) return;
+  try {
+    const doc = await _db.collection('physioTeam').doc('userProfiles').get();
+    const profiles = doc.exists ? doc.data() : {};
+    const entries = Object.entries(profiles).filter(([k]) => !k.startsWith('_'));
+    if (!entries.length) {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem">אין משתמשים רשומים</div>';
+      return;
+    }
+    el.innerHTML = entries.map(([uid, p]) => `
+      <div class="sp-user-row" data-uid="${uid}">
+        <div class="sp-user-info">
+          <div class="sp-user-name">${p.displayName || p.email}</div>
+          <div class="sp-user-email">${p.email}</div>
+        </div>
+        <select class="sp-input sp-user-role" data-uid="${uid}" style="font-size:0.78rem;padding:0.2rem 0.4rem;min-width:90px">
+          <option value="admin"    ${p.role==='admin'    ? 'selected':''}>מנהל</option>
+          <option value="editor"   ${p.role==='editor'   ? 'selected':''}>עורך</option>
+          <option value="readonly" ${p.role==='readonly' ? 'selected':''}>צפייה</option>
+        </select>
+        <select class="sp-input sp-user-therapist" data-uid="${uid}" style="font-size:0.78rem;padding:0.2rem 0.4rem;min-width:75px">
+          <option value="">— ללא —</option>
+          ${state.therapists.map(t => `<option value="${t.id}" ${p.therapistId===t.id?'selected':''}>${t.name}</option>`).join('')}
+        </select>
+        <button class="sp-add-btn" style="padding:0.25rem 0.5rem;font-size:0.75rem;flex-shrink:0" onclick="saveUserProfile('${uid}')">שמור</button>
+      </div>`).join('');
+  } catch(e) {
+    if (el) el.innerHTML = '<div style="color:#DC2626;font-size:0.8rem">שגיאה בטעינת משתמשים</div>';
+  }
+}
+
+window.saveUserProfile = async function(uid) {
+  const roleEl      = document.querySelector(`.sp-user-role[data-uid="${uid}"]`);
+  const therapistEl = document.querySelector(`.sp-user-therapist[data-uid="${uid}"]`);
+  if (!roleEl || !therapistEl || !_db) return;
+  const role = roleEl.value;
+  const therapistId = therapistEl.value || null;
+  try {
+    const doc = await _db.collection('physioTeam').doc('userProfiles').get();
+    const profiles = doc.exists ? doc.data() : {};
+    if (profiles[uid]) {
+      profiles[uid].role = role;
+      profiles[uid].therapistId = therapistId;
+      await _db.collection('physioTeam').doc('userProfiles').set(profiles);
+      if (state.currentUser?.uid === uid) {
+        state.currentUser.role = role;
+        state.currentUser.therapistId = therapistId;
+        _updateUIForPermissions();
+        renderCurrentView();
+      }
+      showToast('פרופיל משתמש עודכן');
+    }
+  } catch(e) { showToast('שגיאה בשמירת הפרופיל'); }
+};
+
+function _updateUIForPermissions() {
+  const autoBtn = document.getElementById('autoAssignBtn');
+  if (autoBtn) autoBtn.style.display = canEdit() ? '' : 'none';
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.style.display = (_auth && state.currentUser) ? '' : 'none';
+}
+
+let _appEventsBound = false;
+
+function _bindAppEvents() {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => switchView(tab.dataset.view));
   });
-
-  // Navigation
   document.getElementById('prevPeriod').addEventListener('click', () => navigate(-1));
   document.getElementById('nextPeriod').addEventListener('click', () => navigate(1));
   document.getElementById('goToday').addEventListener('click', goToday);
   document.getElementById('autoAssignBtn').addEventListener('click', autoAssignWeek);
-
-  // Panel triggers
   document.querySelectorAll('.panel-trigger').forEach(btn => {
     btn.addEventListener('click', () => {
       const type = btn.dataset.panel;
@@ -2246,27 +2404,62 @@ document.addEventListener('DOMContentLoaded', async () => {
       else openPanel(type);
     });
   });
-
-  // Side panel tabs
   document.querySelectorAll('.sp-tab').forEach(tab => {
     tab.addEventListener('click', () => renderPanelContent(tab.dataset.panel));
   });
-
-  // Close panel
   document.getElementById('closeSidePanel').addEventListener('click', closePanel);
   document.getElementById('panelBackdrop').addEventListener('click', closePanel);
-
-  // Assign modal close
   document.getElementById('closeAssignModal').addEventListener('click', () => closeModal('assignModal'));
-
-  // Close modals on overlay click
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
       if (e.target === overlay) overlay.classList.add('hidden');
     });
   });
+  document.getElementById('logoutBtn')?.addEventListener('click', () => _auth?.signOut());
+}
 
-  // Initial render
-  document.getElementById('weeklyView').classList.add('active');
-  renderWeeklyView();
+function _initView() {
+  const todayStr = fmtKey(new Date());
+  if (!state.schedule[todayStr]) state.currentDate = new Date('2026-05-12');
+  _updateUIForPermissions();
+  if (!document.getElementById('weeklyView').classList.contains('active')) {
+    document.getElementById('weeklyView').classList.add('active');
+    state.view = 'weekly';
+  }
+  renderCurrentView();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initFirebase();
+
+  if (_auth) {
+    bindLoginUI();
+    _auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        await _loadUserProfile(user);
+        document.getElementById('loginOverlay').style.display = 'none';
+        await loadState();
+        if (!_appEventsBound) {
+          _bindAppEvents();
+          _appEventsBound = true;
+        }
+        _initView();
+      } else {
+        state.currentUser = null;
+        if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
+        document.getElementById('loginOverlay').style.display = 'flex';
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) logoutBtn.style.display = 'none';
+      }
+    });
+  } else {
+    document.getElementById('loginOverlay').style.display = 'none';
+    loadState().then(() => {
+      if (!_appEventsBound) {
+        _bindAppEvents();
+        _appEventsBound = true;
+      }
+      _initView();
+    });
+  }
 });
