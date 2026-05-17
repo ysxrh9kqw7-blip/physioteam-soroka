@@ -2432,6 +2432,28 @@ function _updateUIForPermissions() {
   _updateGreeting();
 }
 
+const DARK_KEY = 'physioTeamDarkMode';
+const MOON_SVG = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+const SUN_SVG  = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+
+function _initDarkMode() {
+  if (localStorage.getItem(DARK_KEY) === '1') _applyDarkMode(true);
+}
+
+function _applyDarkMode(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : '');
+  const icon = document.getElementById('darkModeIcon');
+  if (icon) icon.innerHTML = dark ? SUN_SVG : MOON_SVG;
+  const btn = document.getElementById('darkModeBtn');
+  if (btn) btn.title = dark ? 'מצב בהיר' : 'מצב כהה';
+}
+
+function _toggleDarkMode() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  _applyDarkMode(!isDark);
+  localStorage.setItem(DARK_KEY, isDark ? '0' : '1');
+}
+
 let _appEventsBound = false;
 
 function _bindAppEvents() {
@@ -2442,7 +2464,9 @@ function _bindAppEvents() {
   document.getElementById('nextPeriod').addEventListener('click', () => navigate(1));
   document.getElementById('goToday').addEventListener('click', goToday);
   document.getElementById('autoAssignBtn').addEventListener('click', autoAssignWeek);
+  document.getElementById('darkModeBtn').addEventListener('click', _toggleDarkMode);
   document.querySelectorAll('.panel-trigger').forEach(btn => {
+    if (btn.id === 'darkModeBtn') return;
     btn.addEventListener('click', () => {
       const type = btn.dataset.panel;
       if (state.activePanel === type) closePanel();
@@ -2475,6 +2499,7 @@ function _initView() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  _initDarkMode();
   initFirebase();
 
   if (_auth) {
