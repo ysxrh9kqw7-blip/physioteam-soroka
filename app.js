@@ -202,7 +202,7 @@ let state = {
 // ─── PERMISSIONS ──────────────────────────────────────────────────────────────
 
 const canEdit            = () => !state.currentUser || state.currentUser.role !== 'readonly';
-const canEditPatients    = () => !state.currentUser || ['admin','editor'].includes(state.currentUser.role);
+const canEditPatients    = () => !state.currentUser || state.currentUser.role === 'admin';
 const isAdmin            = () => !state.currentUser || state.currentUser.role === 'admin';
 const isOwnTherapist     = (tid) => state.currentUser?.therapistId === tid;
 const canEditConstraints = (tid) => !state.currentUser || isAdmin() || isOwnTherapist(tid);
