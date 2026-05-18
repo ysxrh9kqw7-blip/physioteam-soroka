@@ -2501,6 +2501,7 @@ function _bindAppEvents() {
   });
   document.getElementById('closeSidePanel').addEventListener('click', closePanel);
   document.getElementById('panelBackdrop').addEventListener('click', closePanel);
+  window.addEventListener('resize', _updateTopOffset);
   document.getElementById('closeAssignModal').addEventListener('click', () => closeModal('assignModal'));
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
@@ -2510,7 +2511,17 @@ function _bindAppEvents() {
   document.getElementById('logoutBtn')?.addEventListener('click', () => _auth?.signOut());
 }
 
+function _updateTopOffset() {
+  const header  = document.querySelector('.app-header');
+  const toolbar = document.querySelector('.date-toolbar');
+  if (header && toolbar) {
+    const offset = header.offsetHeight + toolbar.offsetHeight;
+    document.documentElement.style.setProperty('--top-offset', offset + 'px');
+  }
+}
+
 function _initView() {
+  _updateTopOffset();
   goToday();
   _updateUIForPermissions();
   if (!document.getElementById('weeklyView').classList.contains('active')) {
