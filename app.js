@@ -2511,8 +2511,7 @@ function _bindAppEvents() {
 }
 
 function _initView() {
-  const todayStr = fmtKey(new Date());
-  if (!state.schedule[todayStr]) state.currentDate = new Date('2026-05-12');
+  goToday();
   _updateUIForPermissions();
   if (!document.getElementById('weeklyView').classList.contains('active')) {
     document.getElementById('weeklyView').classList.add('active');
@@ -2527,6 +2526,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (_auth) {
     bindLoginUI();
+    _auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(() => {});
     _auth.onAuthStateChanged(async (user) => {
       if (user) {
         await _loadUserProfile(user);
